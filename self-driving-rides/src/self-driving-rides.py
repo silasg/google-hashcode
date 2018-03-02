@@ -86,32 +86,34 @@ def get_scored_rides(cur_pos, cur_time, bonus, rides, score_function):
     return sorted(scored_rides, key=lambda i: i[1], reverse=True)
 
 
-def calculate_time_between_rides(ride1: Ride, ride2: Ride):
+def calculate_time_between_rides(ride1: Ride, ride2: Ride, num_steps):
     dist = get_distance_between(ride1.end, ride2.start)
+    if not is_on_time(ride1.latest_finish + dist, ride2.earliest_start):
+        return num_steps  # return penalty if ride2 is not possible to finish after ride1
     wait = waiting(ride1.latest_finish + dist, ride2.earliest_start)
-    return dist + wait  # TODO: return penalty if ride2 is not possible to finish after ride1
+    return dist + wait
 
 
-def append_ride(vehicle_to_rides, ride):
+def append_ride(vehicle_to_rides, ride, num_steps):
     for v in vehicle_to_rides:
         if not vehicle_to_rides[v]:
             vehicle_to_rides[v].append(ride)
             return
 
     sorted_vehicles_by_first_route = sorted(
-        [(v, calculate_time_between_rides(ride, vehicle_to_rides[v][0])) for v in vehicle_to_rides],
+        [(v, calculate_time_between_rides(ride, vehicle_to_rides[v][0], num_steps)) for v in vehicle_to_rides],
         key=lambda i: i[1])
     sorted_vehicles_by_last_route = sorted(
-        [(v, calculate_time_between_rides(ride, vehicle_to_rides[v][-1])) for v in vehicle_to_rides],
+        [(v, calculate_time_between_rides(vehicle_to_rides[v][-1], ride, num_steps)) for v in vehicle_to_rides],
         key=lambda i: i[1])
 
-    v1, first_min_score = sorted_vehicles_by_first_route[0]
-    v2, last_min_score = sorted_vehicles_by_last_route[0]
+    v1, append_head_penalty = sorted_vehicles_by_first_route[0]
+    v2, append_tail_penalty = sorted_vehicles_by_last_route[0]
 
-    if first_min_score < last_min_score:
-        vehicle_to_rides[v1].append(ride)
+    if append_head_penalty < append_tail_penalty:
+        vehicle_to_rides[v1].insert(0, ride)
     else:
-        vehicle_to_rides[v2].insert(0, ride)
+        vehicle_to_rides[v2].append(ride)
 
 
 def get_greedy_solution2(num_vehicles, rides, bonus, num_steps):
@@ -123,7 +125,7 @@ def get_greedy_solution2(num_vehicles, rides, bonus, num_steps):
     progress_printer = utils.ProgressPrinter(rides_len)
 
     for ride in longest_rides:
-        append_ride(vehicle_to_rides, ride)
+        append_ride(vehicle_to_rides, ride, num_steps)
         ride_no += 1
         # print progress only ten times, expensive because of get_score
         if ride_no % max((rides_len // 10), 1) == 0:
