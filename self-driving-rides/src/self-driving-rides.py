@@ -126,7 +126,7 @@ def get_greedy_solution2(num_vehicles, rides, bonus, num_steps):
         append_ride(vehicle_to_rides, ride)
         ride_no += 1
         # print progress only ten times, expensive because of get_score
-        if ride_no % 10 == 0:
+        if ride_no % max((rides_len // 10), 1) == 0:
             progress_printer.print(ride_no, get_score(vehicle_to_rides, bonus, num_steps))
 
     return vehicle_to_rides
