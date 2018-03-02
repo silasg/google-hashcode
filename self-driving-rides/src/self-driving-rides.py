@@ -15,6 +15,7 @@ Ride = typing.NamedTuple('Ride',
 p = Point(1, 2)
 ride1 = Ride(0, Point(0, 0), Point(2, 3), 0, 3)
 
+
 def get_numbers_in_line(line: str):
     return map(int, line[0:-1].split(' '))
 
@@ -75,16 +76,62 @@ def get_score_of_ride(ride: Ride, bonus, cur_pos, cur_time):
     applied_bonus = (int(is_bonus_possible) * bonus)
 
     earning = ride_distance + applied_bonus
-    waisted_time = distance_to_start + waiting_time
+    wasted_time = distance_to_start + waiting_time
 
-    return earning - waisted_time
+    return earning - wasted_time
 
 
 def get_scored_rides(cur_pos, cur_time, bonus, rides, score_function):
     scored_rides = [(ride, score_function(ride, bonus, cur_pos, cur_time)) for ride in rides]
     return sorted(scored_rides, key=lambda i: i[1], reverse=True)
 
-import math
+
+def calculate_time_between_rides(ride1: Ride, ride2: Ride):
+    dist = get_distance_between(ride1.end, ride2.start)
+    wait = waiting(ride1.latest_finish + dist, ride2.earliest_start)
+    return dist + wait  # TODO: return penalty if ride2 is not possible to finish after ride1
+
+
+def append_ride(vehicle_to_rides, ride):
+    for v in vehicle_to_rides:
+        if not vehicle_to_rides[v]:
+            vehicle_to_rides[v].append(ride)
+            return
+
+    sorted_vehicles_by_first_route = sorted(
+        [(v, calculate_time_between_rides(ride, vehicle_to_rides[v][0])) for v in vehicle_to_rides],
+        key=lambda i: i[1])
+    sorted_vehicles_by_last_route = sorted(
+        [(v, calculate_time_between_rides(ride, vehicle_to_rides[v][-1])) for v in vehicle_to_rides],
+        key=lambda i: i[1])
+
+    v1, first_min_score = sorted_vehicles_by_first_route[0]
+    v2, last_min_score = sorted_vehicles_by_last_route[0]
+
+    if first_min_score < last_min_score:
+        vehicle_to_rides[v1].append(ride)
+    else:
+        vehicle_to_rides[v2].insert(0, ride)
+
+
+def get_greedy_solution2(num_vehicles, rides, bonus, num_steps):
+    vehicle_to_rides = {v: [] for v in range(num_vehicles)}
+    longest_rides = sorted(rides, key=lambda ride: get_distance(ride), reverse=True)
+
+    ride_no = 0
+    rides_len = len(longest_rides)
+    progress_printer = utils.ProgressPrinter(rides_len)
+
+    for ride in longest_rides:
+        append_ride(vehicle_to_rides, ride)
+        ride_no += 1
+        # print progress only ten times, expensive because of get_score
+        if ride_no % 10 == 0:
+            progress_printer.print(ride_no, get_score(vehicle_to_rides, bonus, num_steps))
+
+    return vehicle_to_rides
+
+
 
 def get_greedy_solution(num_vehicles, rides, bonus, num_steps):
     remaining_rides = copy.deepcopy(rides)
@@ -96,7 +143,7 @@ def get_greedy_solution(num_vehicles, rides, bonus, num_steps):
     for cur_step in range(num_steps+1):
         # if possible assign new ride
         for v in vehicle_to_rides:
-            if next_steps_busy[v] <= 0: # not busy
+            if next_steps_busy[v] <= 0:  # not busy
                 scored_rides = get_scored_rides(cur_pos[v], cur_step, bonus, remaining_rides,  get_score_of_ride)
                 for ride, _ in scored_rides:
                     distance_of_ride = get_distance(ride)
@@ -114,7 +161,7 @@ def get_greedy_solution(num_vehicles, rides, bonus, num_steps):
         for v in vehicle_to_rides:
             next_steps_busy[v] -= 1
 
-        # print progress online ten times, expensive because of get_score
+        # print progress only ten times, expensive because of get_score
         if cur_step % (num_steps // 10) == 0:
             progress_printer.print(cur_step, get_score(vehicle_to_rides, bonus, num_steps))
 
@@ -134,5 +181,5 @@ if __name__ == '__main__':
     for instance in instances:
         print(f'\n\033[95msolving instance {instance}:\033[0m')
         rows, columns, num_vehicles, num_rides, bonus, num_steps, rides = utils.read_input(instance, get_input)
-        vehicle_to_rides = get_greedy_solution(num_vehicles, rides, bonus, num_steps)
+        vehicle_to_rides = get_greedy_solution2(num_vehicles, rides, bonus, num_steps)
         utils.write_output(instance, to_string(vehicle_to_rides))
